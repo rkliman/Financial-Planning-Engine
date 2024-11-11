@@ -116,9 +116,10 @@ def calculate_post_tax_income(income: float, filing_status: str = 'single') -> t
     return post_tax_income, effective_tax_rate
 
 def analyze_retirement_options(quality_of_life: float, growth_rate: float,
-                             investment_time: int, retirement_time: int,
-                             goal: FinGoal = FinGoal.Sustainable,
-                             filing_status: str = 'single'):
+                               investment_time: int, retirement_time: int,
+                               goal: FinGoal = FinGoal.Sustainable,
+                               filing_status: str = 'single',
+                               employer_match: float = 0.05):
     """Analyze different retirement investment options."""
     
     print(f"\nRetirement Analysis")
@@ -130,6 +131,7 @@ def analyze_retirement_options(quality_of_life: float, growth_rate: float,
     print(f"Expected Return: {growth_rate*100:.1f}%")
     print(f"Inflation Rate: {I*100:.1f}%")
     print(f"Goal: {goal.name}")
+    print(f"Employer Match (for 401k): {employer_match*100:.1f}%")
     print("=" * 50)
     
     # Brokerage Account Analysis
@@ -139,7 +141,8 @@ def analyze_retirement_options(quality_of_life: float, growth_rate: float,
     results = {
         "Brokerage Account": {},
         "Traditional IRA": {},
-        "Roth IRA": {}
+        "Roth IRA": {},
+        "401k": {}
     }
     
     # Brokerage calculations
@@ -188,6 +191,20 @@ def analyze_retirement_options(quality_of_life: float, growth_rate: float,
         )
     })
     
+    # 401(k) calculations
+    # Adjust contribution to account for employer match
+    effective_contribution = required_constant_contribution(
+        comfy_retirement(quality_of_life, retirement_time, growth_rate, I),
+        growth_rate, investment_time
+    ) * (1 + employer_match)
+
+    results["401k"].update({
+        "Principal (Comfortable)": comfy_retirement(quality_of_life, retirement_time, growth_rate, I),
+        "Required Contribution (Comfortable)": effective_contribution,
+        "Principal (Generational)": generational_wealth(quality_of_life, retirement_time, growth_rate, I),
+        "Required Contribution (Generational)": effective_contribution
+    })
+
     # Print results
     for account_type, calculations in results.items():
         print(f"\n{account_type} Analysis:")
