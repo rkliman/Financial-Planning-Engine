@@ -223,152 +223,132 @@ def calculate_capital_gains_tax(gain_amount: float, regular_income: float, filin
     # If no matching bracket was found, use highest rate
     return gain_amount * cg_brackets[filing_status][-1][1]
 
+def calculate_principal_by_goal(future_income: float, retirement_time: int, 
+                                rate_of_return: float, inflation_rate: float, 
+                                goal: FinGoal) -> float:
+    """Calculate required principal based on financial goal."""
+    if goal in [FinGoal.Supplemented, FinGoal.Sustainable]:
+        # For supplemented or sustainable retirement, calculate comfortable retirement
+        return comfy_retirement(future_income, retirement_time, rate_of_return, inflation_rate)
+    elif goal in [FinGoal.Generational, FinGoal.Nobility]:
+        # For generational or nobility, calculate generational wealth
+        return generational_wealth(future_income, retirement_time, rate_of_return, inflation_rate)
+    else:
+        raise ValueError(f"Unsupported financial goal: {goal}")
+
 def analyze_brokerage_account(future_income: float, growth_rate: float, inflation_rate: float, 
-                             investment_time: int, retirement_time: int) -> dict:
-    """Calculate brokerage account retirement needs and contributions."""
+                             investment_time: int, retirement_time: int, goal: FinGoal) -> dict:
+    """Calculate brokerage account retirement needs and contributions based on goal."""
     # For brokerage accounts, consider tax on withdrawals
     brokerage_withdrawal_tax_rate = 0.15  # Simplified capital gains rate
     brokerage_effective_growth = growth_rate - (growth_rate * brokerage_withdrawal_tax_rate)
     
-    principal_comfy = comfy_retirement(future_income, retirement_time, brokerage_effective_growth, inflation_rate)
-    contribution_comfy = required_constant_contribution(principal_comfy, growth_rate, investment_time)
+    principal = calculate_principal_by_goal(
+        future_income, retirement_time, brokerage_effective_growth, inflation_rate, goal
+    )
+    contribution = required_constant_contribution(principal, growth_rate, investment_time)
     
-    principal_gen = generational_wealth(future_income, retirement_time, brokerage_effective_growth, inflation_rate)
-    contribution_gen = required_constant_contribution(principal_gen, growth_rate, investment_time)
-    
+    goal_name = goal.name
     return {
-        "Principal (Comfortable)": principal_comfy,
-        "Required Contribution (Comfortable)": contribution_comfy,
-        "Principal (Generational)": principal_gen,
-        "Required Contribution (Generational)": contribution_gen
+        f"Principal ({goal_name})": principal,
+        f"Required Contribution ({goal_name})": contribution
     }
 
 def analyze_traditional_ira(future_income: float, growth_rate: float, inflation_rate: float, 
-                           investment_time: int, retirement_time: int, filing_status: str,
-                           annual_contribution_limit: float) -> dict:
-    """Calculate traditional IRA retirement needs and contributions."""
+                           investment_time: int, retirement_time: int, goal: FinGoal,
+                           filing_status: str, annual_contribution_limit: float) -> dict:
+    """Calculate traditional IRA retirement needs and contributions based on goal."""
     # Withdrawals taxed as income
     _, withdrawal_tax_rate = calculate_post_tax_income(future_income, filing_status)
     
     # Use full growth rate during accumulation, but account for taxes on withdrawals
-    principal_comfy = comfy_retirement(future_income / (1 - withdrawal_tax_rate), 
-                                     retirement_time, growth_rate, inflation_rate)
-    required_contribution_comfy = required_constant_contribution(principal_comfy, growth_rate, investment_time)
+    principal = calculate_principal_by_goal(
+        future_income / (1 - withdrawal_tax_rate), retirement_time, growth_rate, inflation_rate, goal
+    )
+    required_contribution = required_constant_contribution(principal, growth_rate, investment_time)
     
-    principal_gen = generational_wealth(future_income / (1 - withdrawal_tax_rate), 
-                                      retirement_time, growth_rate, inflation_rate)
-    required_contribution_gen = required_constant_contribution(principal_gen, growth_rate, investment_time)
-    
+    goal_name = goal.name
     return {
-        "Principal (Comfortable)": principal_comfy,
-        "Required Contribution (Comfortable)": min(required_contribution_comfy, annual_contribution_limit),
-        "Contribution Limit Met?": "Yes" if required_contribution_comfy > annual_contribution_limit else "No",
-        "Principal (Generational)": principal_gen,
-        "Required Contribution (Generational)": min(required_contribution_gen, annual_contribution_limit),
-        "Generational Contribution Limit Met?": "Yes" if required_contribution_gen > annual_contribution_limit else "No"
+        f"Principal ({goal_name})": principal,
+        f"Required Contribution ({goal_name})": min(required_contribution, annual_contribution_limit),
+        "Contribution Limit Met?": "Yes" if required_contribution > annual_contribution_limit else "No"
     }
 
 def analyze_roth_ira(future_income: float, growth_rate: float, inflation_rate: float, 
-                    investment_time: int, retirement_time: int, 
+                    investment_time: int, retirement_time: int, goal: FinGoal,
                     annual_contribution_limit: float) -> dict:
-    """Calculate Roth IRA retirement needs and contributions."""
+    """Calculate Roth IRA retirement needs and contributions based on goal."""
     # No taxes on qualified withdrawals
-    principal_comfy = comfy_retirement(future_income, retirement_time, growth_rate, inflation_rate)
-    required_contribution_comfy = required_constant_contribution(principal_comfy, growth_rate, investment_time)
+    principal = calculate_principal_by_goal(
+        future_income, retirement_time, growth_rate, inflation_rate, goal
+    )
+    required_contribution = required_constant_contribution(principal, growth_rate, investment_time)
     
-    principal_gen = generational_wealth(future_income, retirement_time, growth_rate, inflation_rate)
-    required_contribution_gen = required_constant_contribution(principal_gen, growth_rate, investment_time)
-    
+    goal_name = goal.name
     return {
-        "Principal (Comfortable)": principal_comfy,
-        "Required Contribution (Comfortable)": min(required_contribution_comfy, annual_contribution_limit),
-        "Contribution Limit Met?": "Yes" if required_contribution_comfy > annual_contribution_limit else "No",
-        "Principal (Generational)": principal_gen,
-        "Required Contribution (Generational)": min(required_contribution_gen, annual_contribution_limit),
-        "Generational Contribution Limit Met?": "Yes" if required_contribution_gen > annual_contribution_limit else "No"
+        f"Principal ({goal_name})": principal,
+        f"Required Contribution ({goal_name})": min(required_contribution, annual_contribution_limit),
+        "Contribution Limit Met?": "Yes" if required_contribution > annual_contribution_limit else "No"
     }
 
 def analyze_traditional_401k(future_income: float, growth_rate: float, inflation_rate: float, 
-                            investment_time: int, retirement_time: int, filing_status: str,
-                            annual_contribution_limit: float, employer_match: float) -> dict:
-    """Calculate traditional 401k retirement needs and contributions with employer match."""
+                           investment_time: int, retirement_time: int, goal: FinGoal,
+                           filing_status: str, annual_contribution_limit: float, 
+                           employer_match: float) -> dict:
+    """Calculate traditional 401k retirement needs and contributions based on goal."""
     # Withdrawals taxed as income
     _, withdrawal_tax_rate = calculate_post_tax_income(future_income, filing_status)
     
-    principal_comfy = comfy_retirement(future_income / (1 - withdrawal_tax_rate), 
-                                     retirement_time, growth_rate, inflation_rate)
-    base_contribution_comfy = required_constant_contribution(principal_comfy, growth_rate, investment_time)
+    principal = calculate_principal_by_goal(
+        future_income / (1 - withdrawal_tax_rate), retirement_time, growth_rate, inflation_rate, goal
+    )
+    base_contribution = required_constant_contribution(principal, growth_rate, investment_time)
     
     # Apply employer match up to contribution limits
-    employee_contribution = min(base_contribution_comfy, annual_contribution_limit)
+    employee_contribution = min(base_contribution, annual_contribution_limit)
     employer_contribution = min(employee_contribution * employer_match, 
                                annual_contribution_limit * employer_match)
     total_contribution = employee_contribution + employer_contribution
     
-    principal_gen = generational_wealth(future_income / (1 - withdrawal_tax_rate), 
-                                      retirement_time, growth_rate, inflation_rate)
-    base_contribution_gen = required_constant_contribution(principal_gen, growth_rate, investment_time)
-    
-    employee_contribution_gen = min(base_contribution_gen, annual_contribution_limit)
-    employer_contribution_gen = min(employee_contribution_gen * employer_match, 
-                                   annual_contribution_limit * employer_match)
-    total_contribution_gen = employee_contribution_gen + employer_contribution_gen
-    
+    goal_name = goal.name
     return {
-        "Principal (Comfortable)": principal_comfy,
-        "Employee Contribution (Comfortable)": employee_contribution,
-        "Employer Contribution (Comfortable)": employer_contribution,
-        "Total Contribution (Comfortable)": total_contribution,
-        "Contribution Limit Met?": "Yes" if base_contribution_comfy > annual_contribution_limit else "No",
-        "Principal (Generational)": principal_gen,
-        "Employee Contribution (Generational)": employee_contribution_gen,
-        "Employer Contribution (Generational)": employer_contribution_gen,
-        "Total Contribution (Generational)": total_contribution_gen,
-        "Generational Contribution Limit Met?": "Yes" if base_contribution_gen > annual_contribution_limit else "No"
+        f"Principal ({goal_name})": principal,
+        f"Employee Contribution ({goal_name})": employee_contribution,
+        f"Employer Contribution ({goal_name})": employer_contribution,
+        f"Total Contribution ({goal_name})": total_contribution,
+        "Contribution Limit Met?": "Yes" if base_contribution > annual_contribution_limit else "No"
     }
 
 def analyze_roth_401k(future_income: float, growth_rate: float, inflation_rate: float, 
-                     investment_time: int, retirement_time: int, filing_status: str,
-                     annual_contribution_limit: float, employer_match: float,
-                     current_income: float) -> dict:
-    """Calculate Roth 401k retirement needs and contributions with employer match."""
+                    investment_time: int, retirement_time: int, goal: FinGoal,
+                    filing_status: str, annual_contribution_limit: float, 
+                    employer_match: float, current_income: float) -> dict:
+    """Calculate Roth 401k retirement needs and contributions based on goal."""
     # No taxes on qualified withdrawals
-    principal_comfy = comfy_retirement(future_income, retirement_time, growth_rate, inflation_rate)
-    base_contribution_comfy = required_constant_contribution(principal_comfy, growth_rate, investment_time)
+    principal = calculate_principal_by_goal(
+        future_income, retirement_time, growth_rate, inflation_rate, goal
+    )
+    base_contribution = required_constant_contribution(principal, growth_rate, investment_time)
     
     # Apply employer match up to contribution limits
-    employee_contribution = min(base_contribution_comfy, annual_contribution_limit)
+    employee_contribution = min(base_contribution, annual_contribution_limit)
     employer_contribution = min(employee_contribution * employer_match, 
                                annual_contribution_limit * employer_match)
     total_contribution = employee_contribution + employer_contribution
-    
-    principal_gen = generational_wealth(future_income, retirement_time, growth_rate, inflation_rate)
-    base_contribution_gen = required_constant_contribution(principal_gen, growth_rate, investment_time)
-    
-    employee_contribution_gen = min(base_contribution_gen, annual_contribution_limit)
-    employer_contribution_gen = min(employee_contribution_gen * employer_match, 
-                                   annual_contribution_limit * employer_match)
-    total_contribution_gen = employee_contribution_gen + employer_contribution_gen
     
     # Calculate the effective contribution cost accounting for taxes
     # For Roth, contributions are made after-tax, so the cost is higher
     _, effective_tax_rate = calculate_post_tax_income(current_income, filing_status)
     effective_contribution = employee_contribution / (1 - effective_tax_rate)
-    effective_contribution_gen = employee_contribution_gen / (1 - effective_tax_rate)
     
+    goal_name = goal.name
     return {
-        "Principal (Comfortable)": principal_comfy,
-        "Employee Contribution After-Tax (Comfortable)": employee_contribution,
-        "Employer Contribution Traditional (Comfortable)": employer_contribution,
-        "Total Contribution (Comfortable)": total_contribution,
-        "Effective Pre-Tax Cost (Comfortable)": effective_contribution,
-        "Contribution Limit Met?": "Yes" if base_contribution_comfy > annual_contribution_limit else "No",
-        "Principal (Generational)": principal_gen,
-        "Employee Contribution After-Tax (Generational)": employee_contribution_gen,
-        "Employer Contribution Traditional (Generational)": employer_contribution_gen,
-        "Total Contribution (Generational)": total_contribution_gen,
-        "Effective Pre-Tax Cost (Generational)": effective_contribution_gen,
-        "Generational Contribution Limit Met?": "Yes" if base_contribution_gen > annual_contribution_limit else "No",
+        f"Principal ({goal_name})": principal,
+        f"Employee Contribution After-Tax ({goal_name})": employee_contribution,
+        f"Employer Contribution Traditional ({goal_name})": employer_contribution,
+        f"Total Contribution ({goal_name})": total_contribution,
+        f"Effective Pre-Tax Cost ({goal_name})": effective_contribution,
+        "Contribution Limit Met?": "Yes" if base_contribution > annual_contribution_limit else "No",
         "Note": "Employer match contributions go into a Traditional 401(k), not the Roth 401(k)"
     }
 
@@ -409,25 +389,25 @@ def analyze_retirement_options(quality_of_life: float, growth_rate: float,
     # Calculate future income needs adjusted for inflation
     future_income = quality_of_life * (1 + I)**investment_time
     
-    # Calculate results for each account type
+    # Calculate results for each account type based on specified goal
     results = {
         "Brokerage Account": analyze_brokerage_account(
-            future_income, growth_rate, I, investment_time, retirement_time
+            future_income, growth_rate, I, investment_time, retirement_time, goal
         ),
         "Traditional IRA": analyze_traditional_ira(
-            future_income, growth_rate, I, investment_time, retirement_time, 
+            future_income, growth_rate, I, investment_time, retirement_time, goal,
             filing_status, annual_contribution_limit_ira
         ),
         "Roth IRA": analyze_roth_ira(
-            future_income, growth_rate, I, investment_time, retirement_time,
+            future_income, growth_rate, I, investment_time, retirement_time, goal,
             annual_contribution_limit_ira
         ),
         "Traditional 401k": analyze_traditional_401k(
-            future_income, growth_rate, I, investment_time, retirement_time,
+            future_income, growth_rate, I, investment_time, retirement_time, goal,
             filing_status, annual_contribution_limit_401k, employer_match
         ),
         "Roth 401k": analyze_roth_401k(
-            future_income, growth_rate, I, investment_time, retirement_time,
+            future_income, growth_rate, I, investment_time, retirement_time, goal,
             filing_status, annual_contribution_limit_401k, employer_match, quality_of_life
         )
     }
@@ -456,21 +436,26 @@ def analyze_retirement_options(quality_of_life: float, growth_rate: float,
     print("- Employer match is effectively 'free money' and improves return regardless of account type")
     print("- Roth 401(k) employer match contributions go into a Traditional 401(k)")
 
-    print("\nRecommended Strategy Based on Required Contributions:")
+    print(f"\nRecommended Strategy Based on Required Contributions for {goal.name} Goal:")
     # Find lowest required contribution approach
     min_contribution = float('inf')
     min_account_type = ""
+    
     for account_type, calculations in results.items():
-        if account_type == "Traditional 401k" or account_type == "Roth 401k":
-            contribution = calculations.get("Employee Contribution (Comfortable)", float('inf'))
+        if account_type == "Traditional 401k":
+            contribution_key = f"Employee Contribution ({goal.name})"
+        elif account_type == "Roth 401k":
+            contribution_key = f"Employee Contribution After-Tax ({goal.name})"
         else:
-            contribution = calculations.get("Required Contribution (Comfortable)", float('inf'))
+            contribution_key = f"Required Contribution ({goal.name})"
+        
+        contribution = calculations.get(contribution_key, float('inf'))
         
         if contribution < min_contribution:
             min_contribution = contribution
             min_account_type = account_type
     
-    print(f"Lowest contribution requirement for comfortable retirement: {min_account_type} (${min_contribution:,.2f}/year)")
+    print(f"Lowest contribution requirement: {min_account_type} (${min_contribution:,.2f}/year)")
 
 # Example usage
 if __name__ == "__main__":
