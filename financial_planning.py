@@ -24,8 +24,8 @@ T2 = 35     # retirement time (years) - distribution phase
 R = 0.07    # rate of return (10%)
 I = 0.03    # inflation rate (3%)
 
-NG = 0.02 # desired growth rate for nobility wealth
-SP = 0.40 # percentage of income that needs to come from savings
+NG = 0.02  # desired growth rate for nobility wealth
+SP = 0.40  # percentage of income that needs to come from savings
 
 
 def constant_contribution(R: float, T: int, C: float) -> float:
@@ -166,6 +166,7 @@ def required_constant_contribution(target_amount: float, rate_of_return: float,
         raise ValueError("Rate of return must be positive")
     return (target_amount * rate_of_return) / ((1 + rate_of_return)**investment_duration - 1)
 
+
 def calculate_fica(income: float, filing_status: str = 'single') -> float:
     social_security_cap = 168600
     ss_tax = min(income, social_security_cap) * 0.062
@@ -181,9 +182,11 @@ def calculate_fica(income: float, filing_status: str = 'single') -> float:
 
     addl_medicare = 0
     if income > addl_medicare_threshold[filing_status]:
-        addl_medicare = (income - addl_medicare_threshold[filing_status]) * 0.009
+        addl_medicare = (
+            income - addl_medicare_threshold[filing_status]) * 0.009
 
     return ss_tax + medicare_tax + addl_medicare
+
 
 def calculate_post_tax_income(income: float, filing_status: str = 'single') -> tuple:
     """
@@ -535,6 +538,7 @@ def analyze_retirement_options(quality_of_life: float, growth_rate: float,
     # print("- Roth 401(k) employer match contributions go into a Traditional 401(k)")
     return results
 
+
 def wrap_labels(ax, width, break_long_words=False):
     labels = []
     for label in ax.get_xticklabels():
@@ -542,13 +546,14 @@ def wrap_labels(ax, width, break_long_words=False):
         labels.append(textwrap.fill(text, width=width,
                       break_long_words=break_long_words))
     ax.set_xticklabels(labels, rotation=0)
-    
+
     labels = []
     for label in ax.get_yticklabels():
         text = label.get_text()
         labels.append(textwrap.fill(text, width=width,
                       break_long_words=break_long_words))
     ax.set_yticklabels(labels, rotation=0)
+
 
 # Example usage
 if __name__ == "__main__":
@@ -578,7 +583,8 @@ if __name__ == "__main__":
 
     account_types = ["Brokerage Account", "Traditional IRA",
                      "Roth IRA", "Traditional 401k", "Roth 401k"]
-    financial_goals = [f"Supplemented ({(1-SP)*100:.1f}%)", "Sustainable Retirement", "Generational Wealth", f"Nobility (+{NG*100:.1f}%/yr)"]
+    financial_goals = [f"Supplemented ({(1-SP)*100:.1f}%)", "Sustainable Retirement",
+                       "Generational Wealth", f"Nobility (+{NG*100:.1f}%/yr)"]
 
     print("Required Principal by Account Type")
     df_principal = pd.DataFrame()
@@ -591,7 +597,7 @@ if __name__ == "__main__":
         ]
     df_principal.index = financial_goals
     print(df_principal)
-    
+
     print("\nYearly Contribution by Account Type")
     df_contribution = pd.DataFrame()
     for account_type in account_types:
@@ -611,8 +617,9 @@ if __name__ == "__main__":
     # Plot the transposed tables as seaborn heatmaps
     scale = 1.0
     fig, axes = plt.subplots(3, 1, figsize=(8.5 * scale, 11 * scale))
-    fig.subplots_adjust(hspace=0.5)  # Adds vertical space between text and plots
-    
+    # Adds vertical space between text and plots
+    fig.subplots_adjust(hspace=0.5)
+
     summary_text = (
         f""
         f"Pre-Tax Income: ${W:,.2f}/year (2024 dollars)\n"
@@ -631,11 +638,13 @@ if __name__ == "__main__":
     )
     # axes[0].set_title("Information Summary")
     axes[0].axis('off')
-    axes[0].text(-0.1, 0.98, summary_text, fontsize=10, va='top', ha='left', family='sans-serif')
+    axes[0].text(-0.1, 0.98, summary_text, fontsize=10,
+                 va='top', ha='left', family='sans-serif')
 
     # Format the annotations with dollar signs and commas
     df_principal_fmt = df_principal_t.applymap(lambda x: f"${x:,.0f}")
-    df_contribution_fmt = df_contribution_t.applymap(lambda x: f"${x:,.0f} ({x/Wt:.1%})")
+    df_contribution_fmt = df_contribution_t.applymap(
+        lambda x: f"${x:,.0f} ({x/Wt:.1%})")
 
     # Heatmap for Required Principal
     sns.heatmap(df_principal_t, annot=df_principal_fmt, fmt="", cmap="OrRd", ax=axes[1],
@@ -643,7 +652,8 @@ if __name__ == "__main__":
     axes[1].set_title("Required Principal by Financial Goal")
     axes[1].set_xlabel("Financial Goal")
     axes[1].set_ylabel("Account Type")
-    axes[1].tick_params(axis='x', labelsize=10, labelbottom=False, bottom=False, labeltop=True, top=False)
+    axes[1].tick_params(axis='x', labelsize=10, labelbottom=False,
+                        bottom=False, labeltop=True, top=False)
     axes[1].tick_params(axis='y', labelsize=10)
     wrap_labels(axes[1], 15, break_long_words=True)
 
@@ -653,18 +663,16 @@ if __name__ == "__main__":
     axes[2].set_title("Yearly Contribution by Financial Goal")
     axes[2].set_xlabel("Financial Goal")
     axes[2].set_ylabel("Account Type")
-    axes[2].tick_params(axis='x', labelsize=10, labelbottom=False, bottom=False, labeltop=True, top=False)
+    axes[2].tick_params(axis='x', labelsize=10, labelbottom=False,
+                        bottom=False, labeltop=True, top=False)
     axes[2].tick_params(axis='y', labelsize=10)
     wrap_labels(axes[2], 15, break_long_words=True)
 
     plt.suptitle("Retirement Analysis Summary", fontsize=16, fontweight='bold')
     # plt.tight_layout(w_pad=3.0, h_pad=3.0)  # Leave room for suptitle
-    plt.tight_layout(rect=(0, 0, 1, 0.98))  # Adjust layout to leave space for suptitle
-    
+    # Adjust layout to leave space for suptitle
+    plt.tight_layout(rect=(0, 0, 1, 0.98))
+
     fig.savefig("retirement_report.pdf")
-    
+
     # plt.show()
-
-
-
-    
