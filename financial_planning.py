@@ -28,6 +28,31 @@ def constant_contribution(R: float, T: int, C: float) -> float:
     """
     return C * ((1 + R)**T - 1) / R
 
+def supplemented_retirement(desired_income: float, retirement_duration: int,
+                           rate_of_return: float, rate_of_inflation: float,
+                           supplemental_percentage: float = 0.40) -> float:
+    """
+    Calculate principal needed for supplemented retirement.
+    This assumes you'll have other income sources (like Social Security)
+    covering a portion of your retirement needs.
+    
+    Args:
+        desired_income: Total annual income needed (in today's dollars)
+        retirement_duration: Expected retirement length in years
+        rate_of_return: Expected annual return rate (decimal)
+        rate_of_inflation: Expected annual inflation rate (decimal)
+        supplemental_percentage: Percentage of income that needs to come from savings (decimal)
+        
+    Returns:
+        Principal amount needed at retirement start
+    """
+    # Only need to fund the portion not covered by other income sources
+    supplemental_income = desired_income * supplemental_percentage
+    
+    # Use the same calculation as comfortable retirement but with reduced income need
+    return comfy_retirement(supplemental_income, retirement_duration, 
+                           rate_of_return, rate_of_inflation)
+
 def comfy_retirement(desired_income: float, retirement_duration: int, 
                     rate_of_return: float, rate_of_inflation: float) -> float:
     """
@@ -74,6 +99,34 @@ def generational_wealth(desired_income: float, retirement_duration: int,
         print("WARNING: Return rate is very close to inflation rate. Results may be unreliable.")
         
     return desired_income / (rate_of_return - rate_of_inflation)
+
+def nobility_wealth(desired_income: float, retirement_duration: int,
+                   rate_of_return: float, rate_of_inflation: float, 
+                   growth_factor: float = 0.03) -> float:
+    """
+    Calculate principal needed for nobility wealth.
+    This goes beyond generational wealth by ensuring the principal 
+    continues to grow in real terms even after withdrawals.
+    
+    Args:
+        desired_income: Annual withdrawal amount needed (in today's dollars)
+        retirement_duration: Not used but included for API consistency
+        rate_of_return: Expected annual return rate (decimal)
+        rate_of_inflation: Expected annual inflation rate (decimal)
+        growth_factor: Annual real growth rate desired beyond inflation (decimal)
+        
+    Returns:
+        Principal amount needed for perpetual withdrawals with real growth
+    """
+    # We need to ensure growth even after withdrawals
+    if rate_of_return <= rate_of_inflation + growth_factor:
+        raise ValueError("Rate of return must be greater than inflation plus desired growth rate")
+        
+    # The principal needs to be large enough to:
+    # 1. Generate the desired income
+    # 2. Keep up with inflation
+    # 3. Grow at the specified real rate
+    return desired_income / (rate_of_return - rate_of_inflation - growth_factor)
 
 def required_constant_contribution(target_amount: float, rate_of_return: float, 
                                  investment_duration: int) -> float:
@@ -224,17 +277,16 @@ def calculate_capital_gains_tax(gain_amount: float, regular_income: float, filin
     return gain_amount * cg_brackets[filing_status][-1][1]
 
 def calculate_principal_by_goal(future_income: float, retirement_time: int, 
-                                rate_of_return: float, inflation_rate: float, 
+                               rate_of_return: float, inflation_rate: float, 
                                 goal: FinGoal) -> float:
     """Calculate required principal based on financial goal."""
-    if goal in [FinGoal.Supplemented, FinGoal.Sustainable]:
-        # For supplemented or sustainable retirement, calculate comfortable retirement
-        return comfy_retirement(future_income, retirement_time, rate_of_return, inflation_rate)
-    elif goal in [FinGoal.Generational, FinGoal.Nobility]:
-        # For generational or nobility, calculate generational wealth
-        return generational_wealth(future_income, retirement_time, rate_of_return, inflation_rate)
-    else:
-        raise ValueError(f"Unsupported financial goal: {goal}")
+    func_map = {
+        FinGoal.Supplemented: supplemented_retirement,
+        FinGoal.Sustainable: comfy_retirement,
+        FinGoal.Generational: generational_wealth,
+        FinGoal.Nobility: nobility_wealth
+    }
+    return func_map[goal](future_income, retirement_time, rate_of_return, inflation_rate)
 
 def analyze_brokerage_account(future_income: float, growth_rate: float, inflation_rate: float, 
                              investment_time: int, retirement_time: int, goal: FinGoal) -> dict:
