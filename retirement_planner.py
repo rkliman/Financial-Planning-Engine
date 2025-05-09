@@ -1,12 +1,8 @@
 from enum import Enum
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 import warnings
-from matplotlib.backends.backend_pdf import PdfPages
-import textwrap
-import matplotlib.gridspec as gridspec
-# sns.set_theme(style="whitegrid")
+import generate_report as gr
+from finlib import required_constant_contribution, calculate_post_tax_income
 
 
 class FinGoal(Enum):
@@ -26,22 +22,6 @@ I = 0.03    # inflation rate (3%)
 
 NG = 0.02  # desired growth rate for nobility wealth
 SP = 0.40  # percentage of income that needs to come from savings
-
-
-def constant_contribution(R: float, T: int, C: float) -> float:
-    """
-    Calculate final amount with constant contribution.
-
-    Args:
-        R: Annual rate of return (decimal)
-        T: Time period in years
-        C: Annual contribution amount
-
-    Returns:
-        Final account value after T years
-    """
-    return C * ((1 + R)**T - 1) / R
-
 
 def supplemented_retirement(desired_income: float, retirement_duration: int,
                             rate_of_return: float, rate_of_inflation: float) -> float:
@@ -147,183 +127,6 @@ def nobility_wealth(desired_income: float, retirement_duration: int,
     # 2. Keep up with inflation
     # 3. Grow at the specified real rate
     return desired_income / (rate_of_return - rate_of_inflation - NG)
-
-
-def required_constant_contribution(target_amount: float, rate_of_return: float,
-                                   investment_duration: int) -> float:
-    """
-    Calculate required yearly contribution to reach target amount.
-
-    Args:
-        target_amount: Desired final account value
-        rate_of_return: Expected annual return rate (decimal)
-        investment_duration: Years of investment
-
-    Returns:
-        Required annual contribution amount
-    """
-    if rate_of_return <= 0:
-        raise ValueError("Rate of return must be positive")
-    return (target_amount * rate_of_return) / ((1 + rate_of_return)**investment_duration - 1)
-
-
-def calculate_fica(income: float, filing_status: str = 'single') -> float:
-    social_security_cap = 168600
-    ss_tax = min(income, social_security_cap) * 0.062
-    medicare_tax = income * 0.0145
-
-    # Additional Medicare Tax for high earners
-    addl_medicare_threshold = {
-        'single': 200000,
-        'married_joint': 250000,
-        'married_separate': 125000,
-        'head_household': 200000
-    }
-
-    addl_medicare = 0
-    if income > addl_medicare_threshold[filing_status]:
-        addl_medicare = (
-            income - addl_medicare_threshold[filing_status]) * 0.009
-
-    return ss_tax + medicare_tax + addl_medicare
-
-
-def calculate_post_tax_income(income: float, filing_status: str = 'single') -> tuple:
-    """
-    Calculate post-tax income using progressive tax brackets (2024 rates).
-
-    Args:
-        income: Gross annual income
-        filing_status: Tax filing status ('single', 'married_joint', etc.)
-
-    Returns:
-        Tuple of (post-tax income, effective tax rate)
-    """
-    brackets = {
-        'single': [
-            (11600, 0.10),
-            (47150, 0.12),
-            (100525, 0.22),
-            (191950, 0.24),
-            (243725, 0.32),
-            (609350, 0.35),
-            (float('inf'), 0.37)
-        ],
-        'married_joint': [
-            (23200, 0.10),
-            (94300, 0.12),
-            (201050, 0.22),
-            (383900, 0.24),
-            (487450, 0.32),
-            (731200, 0.35),
-            (float('inf'), 0.37)
-        ],
-        'married_separate': [
-            (11600, 0.10),
-            (47150, 0.12),
-            (100525, 0.22),
-            (191950, 0.24),
-            (243725, 0.32),
-            (365600, 0.35),
-            (float('inf'), 0.37)
-        ],
-        'head_household': [
-            (16550, 0.10),
-            (63100, 0.12),
-            (100500, 0.22),
-            (191950, 0.24),
-            (243700, 0.32),
-            (609350, 0.35),
-            (float('inf'), 0.37)
-        ]
-    }
-
-    if filing_status not in brackets:
-        raise ValueError(
-            f"Invalid filing status. Must be one of: {', '.join(brackets.keys())}")
-
-    # Standard deduction 2024
-    std_deduction = {
-        'single': 14600,
-        'married_joint': 29200,
-        'married_separate': 14600,
-        'head_household': 21900
-    }
-
-    # Apply standard deduction
-    taxable_income = max(0, income - std_deduction[filing_status])
-
-    total_tax = 0
-    previous_bracket = 0
-
-    # Calculate tax using progressive brackets
-    for bracket_max, rate in brackets[filing_status]:
-        if taxable_income > previous_bracket:
-            taxable_in_bracket = min(
-                taxable_income - previous_bracket, bracket_max - previous_bracket)
-            tax_in_bracket = taxable_in_bracket * rate
-            total_tax += tax_in_bracket
-
-            if taxable_income <= bracket_max:
-                break
-
-        previous_bracket = bracket_max
-
-    fica_tax = calculate_fica(income, filing_status)
-    post_tax_income = income - total_tax - fica_tax
-    effective_tax_rate = ((total_tax + fica_tax) / income) if income > 0 else 0
-
-    return post_tax_income, effective_tax_rate
-
-
-def calculate_capital_gains_tax(gain_amount: float, regular_income: float, filing_status: str = 'single') -> float:
-    """
-    Calculate capital gains tax based on 2024 rates.
-
-    Args:
-        gain_amount: Amount of capital gain
-        regular_income: Other taxable income
-        filing_status: Tax filing status
-
-    Returns:
-        Estimated capital gains tax
-    """
-    # 2024 capital gains tax brackets
-    cg_brackets = {
-        'single': [
-            (44625, 0.0),
-            (492300, 0.15),
-            (float('inf'), 0.20)
-        ],
-        'married_joint': [
-            (89250, 0.0),
-            (553850, 0.15),
-            (float('inf'), 0.20)
-        ],
-        'married_separate': [
-            (44625, 0.0),
-            (276900, 0.15),
-            (float('inf'), 0.20)
-        ],
-        'head_household': [
-            (59750, 0.0),
-            (523050, 0.15),
-            (float('inf'), 0.20)
-        ]
-    }
-
-    if filing_status not in cg_brackets:
-        raise ValueError(
-            f"Invalid filing status for capital gains calculation")
-
-    # Find applicable tax rate based on income level
-    for threshold, rate in cg_brackets[filing_status]:
-        if regular_income + gain_amount <= threshold:
-            return gain_amount * rate
-
-    # If no matching bracket was found, use highest rate
-    return gain_amount * cg_brackets[filing_status][-1][1]
-
 
 def calculate_principal_by_goal(future_income: float, retirement_time: int,
                                 rate_of_return: float, inflation_rate: float,
@@ -539,22 +342,6 @@ def analyze_retirement_options(quality_of_life: float, growth_rate: float,
     return results
 
 
-def wrap_labels(ax, width, break_long_words=False):
-    labels = []
-    for label in ax.get_xticklabels():
-        text = label.get_text()
-        labels.append(textwrap.fill(text, width=width,
-                      break_long_words=break_long_words))
-    ax.set_xticklabels(labels, rotation=0)
-
-    labels = []
-    for label in ax.get_yticklabels():
-        text = label.get_text()
-        labels.append(textwrap.fill(text, width=width,
-                      break_long_words=break_long_words))
-    ax.set_yticklabels(labels, rotation=0)
-
-
 # Example usage
 if __name__ == "__main__":
     W = 126000  # current yearly income
@@ -586,7 +373,6 @@ if __name__ == "__main__":
     financial_goals = [f"Supplemented ({(1-SP)*100:.1f}%)", "Sustainable Retirement",
                        "Generational Wealth", f"Nobility (+{NG*100:.1f}%/yr)"]
 
-    print("Required Principal by Account Type")
     df_principal = pd.DataFrame()
     for account_type in account_types:
         df_principal[account_type] = [
@@ -596,9 +382,7 @@ if __name__ == "__main__":
             nobility[account_type]["Principal Required"]
         ]
     df_principal.index = financial_goals
-    print(df_principal)
 
-    print("\nYearly Contribution by Account Type")
     df_contribution = pd.DataFrame()
     for account_type in account_types:
         df_contribution[account_type] = [
@@ -608,71 +392,10 @@ if __name__ == "__main__":
             nobility[account_type]["Yearly Contribution"]
         ]
     df_contribution.index = financial_goals
-    print(df_contribution)
 
     # Transpose the DataFrames
     df_principal_t = df_principal.T
     df_contribution_t = df_contribution.T
-
-    # Plot the transposed tables as seaborn heatmaps
-    scale = 1.0
-    fig, axes = plt.subplots(3, 1, figsize=(8.5 * scale, 11 * scale))
-    # Adds vertical space between text and plots
-    fig.subplots_adjust(hspace=0.5)
-
-    summary_text = (
-        f""
-        f"Pre-Tax Income: ${W:,.2f}/year (2024 dollars)\n"
-        f"Post-Tax Income: ${Wt:,.2f}/year (2024 dollars)\n"
-        f"Retirement Income: ${Wt:,.2f}/year (2024 dollars)\n"
-        f"Investment Period: {T1} years\n"
-        f"Retirement Period: {T2} years\n"
-        f"Expected Return: {R*100:.1f}%\n"
-        f"Inflation Rate: {I*100:.1f}%\n"
-        f""
-        f"Financial Goals:\n"
-        f" 1. Supplemented ({(1-SP)*100:.1f}%): {(1-SP)*100:.1f}% of income comes from retirement account\n"
-        f" 2. Sustainable Retirement: Retirement account will be empty at the end of retirement\n"
-        f" 3. Generational Wealth: Can perpetually pull from account without loss of value\n"
-        f" 4. Nobility (+{NG*100:.1f}%/yr): Pulling from account doesn't stop account growth\n"
-    )
-    # axes[0].set_title("Information Summary")
-    axes[0].axis('off')
-    axes[0].text(-0.1, 0.98, summary_text, fontsize=10,
-                 va='top', ha='left', family='sans-serif')
-
-    # Format the annotations with dollar signs and commas
-    df_principal_fmt = df_principal_t.applymap(lambda x: f"${x:,.0f}")
-    df_contribution_fmt = df_contribution_t.applymap(
-        lambda x: f"${x:,.0f} ({x/Wt:.1%})")
-
-    # Heatmap for Required Principal
-    sns.heatmap(df_principal_t, annot=df_principal_fmt, fmt="", cmap="OrRd", ax=axes[1],
-                cbar_kws={'label': 'Principal ($)'})
-    axes[1].set_title("Required Principal by Financial Goal")
-    axes[1].set_xlabel("Financial Goal")
-    axes[1].set_ylabel("Account Type")
-    axes[1].tick_params(axis='x', labelsize=10, labelbottom=False,
-                        bottom=False, labeltop=True, top=False)
-    axes[1].tick_params(axis='y', labelsize=10)
-    wrap_labels(axes[1], 15, break_long_words=True)
-
-    # Heatmap for Yearly Contribution
-    sns.heatmap(df_contribution_t, annot=df_contribution_fmt, fmt="", cmap="OrRd", ax=axes[2],
-                cbar_kws={'label': 'Contribution ($/yr)'})
-    axes[2].set_title("Yearly Contribution by Financial Goal")
-    axes[2].set_xlabel("Financial Goal")
-    axes[2].set_ylabel("Account Type")
-    axes[2].tick_params(axis='x', labelsize=10, labelbottom=False,
-                        bottom=False, labeltop=True, top=False)
-    axes[2].tick_params(axis='y', labelsize=10)
-    wrap_labels(axes[2], 15, break_long_words=True)
-
-    plt.suptitle("Retirement Analysis Summary", fontsize=16, fontweight='bold')
-    # plt.tight_layout(w_pad=3.0, h_pad=3.0)  # Leave room for suptitle
-    # Adjust layout to leave space for suptitle
-    plt.tight_layout(rect=(0, 0, 1, 0.98))
-
-    fig.savefig("retirement_report.pdf")
-
-    # plt.show()
+    
+    gr.plot_finances(df_principal_t, df_contribution_t, (W, Wt, T1, T2, R, I, SP, NG))
+    
